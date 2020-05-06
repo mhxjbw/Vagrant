@@ -1,0 +1,35 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+
+Vagrant.configure("2") do |config|
+
+  config.vm.box = "bento/ubuntu-16.04"
+  config.vm.hostname = "helix"
+  config.vm.network "public_network", bridge: "en0"
+  config.vm.network "forwarded_port", guest: 22, host: 2, id: 'ssh'
+  config.vm.network "forwarded_port", guest: 1666, host: 1666, id: 'helixp4d'
+  
+  config.vm.provider "parallels" do |v|
+    v.check_guest_tools=true
+    v.update_guest_tools=true
+    v.optimize_power_consumption = false
+    v.cpus = 2
+    v.memory = 2048
+    v.name = "Helix"
+  end  
+
+  config.vm.provider "vmware_desktop" do |v|
+    #v.gui = true
+    v.vmx["numvcpus"] = "2"
+    v.vmx["memsize"] = "2048"
+    v.whitelist_verified = true
+  end  
+  
+  config.vm.provision "shell", path: "shell/installp4d.sh"
+  
+end
