@@ -1,0 +1,2 @@
+# Vagrant
+Vagrant machine configurations
