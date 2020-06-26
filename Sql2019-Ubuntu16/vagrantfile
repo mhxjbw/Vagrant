@@ -11,24 +11,61 @@ Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-16.04"
   config.vm.hostname = "sql2019"
   config.vm.network "public_network", bridge: "en0"
-  config.vm.network "forwarded_port", guest: 22, host: 2, id: 'ssh'
-  config.vm.network "forwarded_port", guest: 1433, host: 1433, id: 'sql2019'
-  
-  config.vm.provider "parallels" do |v|
-    v.check_guest_tools=true
-    v.update_guest_tools=true
-    v.optimize_power_consumption = false
-    v.cpus = 2
-    v.memory = 4096
-    v.name = "SQL2019"
-  end  
 
+  # The following were causing me problems after I got my VM up and running.
+  # I've commented them out so I don't get port-remapping errors.
+
+  #config.vm.network "forwarded_port", guest: 22, host: 2, id: 'ssh'
+  #config.vm.network "forwarded_port", guest: 1433, host: 1433, id: 'sql2019'
+  
   config.vm.provider "vmware_desktop" do |v|
+    v.gui = true
     v.vmx["numvcpus"] = "2"
     v.vmx["memsize"] = "4096"
     v.whitelist_verified = true
+
+    # This is the path when using this Vagrant file on Windows rather than macOS.
+    #vdiskmanager = "'C:\\Program\ Files\ (x86)\\VMware\\VMware\ Workstation\\vmware-vdiskmanager.exe'"
+    vdiskmanager = '/Applications/VMware\ Fusion.app/Contents/Library/vmware-vdiskmanager'
+
+	# This clever little bit of scripting gets the directory in which the 
+	# vagrant file resides, then uses that to make a datadrive subfolder.
+	# The code below will call the virtual disk manager utility to create
+	# a 120 GB datadrive at that location and add it to the VM definition
+	# file accordingly. The first bit of provisioning script then runs through
+	# the Linux process to partition it, create a file system, and mount it
+	# at startup by appending to the relevant configuration file.
+
+    #dir = "#{ENV['HOME']}/datadrive"
+    vagrant_root = File.dirname(__FILE__)
+    dir = "#{vagrant_root}/datadrive"
+
+    unless File.directory?( dir )
+      Dir.mkdir dir
+    end
+
+    file_to_disk = "#{dir}/datadrive.vmdk"
+
+    unless File.exists?( file_to_disk )
+      `#{vdiskmanager} -c -s 120GB -a lsilogic -t 1 #{file_to_disk}`
+    end
+
+    vagrant_root = File.dirname(__FILE__)
+    v.vmx['scsi0:1.filename'] = "#{dir}/datadrive.vmdk"
+    v.vmx['scsi0:1.present']  = 'TRUE'
+    v.vmx['scsi0:1.redo']     = ''
   end  
+   
+  config.vm.provision :shell, :inline =>
+    "set -x && " +
+    "mkdir -p /datadrive && " +
+    "grep -q sdb1 /proc/partitions || ( " +
+      "echo ',,83' | sfdisk -q /dev/sdb && " +
+      "mkfs.ext4 /dev/sdb1 " +
+    ") && " +
+    "grep -q sdb1 /etc/fstab || echo '/dev/sdb1 /datadrive ext4 defaults 0 0' >> /etc/fstab && " +
+    "grep -q /datadrive /proc/mounts || mount /datadrive" 
   
-config.vm.provision "shell", path: "shell/installsqlserver.sh"
+  config.vm.provision "shell", path: "shell/installsqlserver.sh"
   
 end
